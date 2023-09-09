@@ -32,7 +32,9 @@ Name2
 ignored: name0, name4
 
 **/add name0** -- add students, removes them from ignored if necessary
+
 students: name0, name1, name2, name3
+
 ignored: name4
 
 **/timer N** -- sets the timer for N minutes

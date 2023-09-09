@@ -8,7 +8,7 @@ def teacher_only(func):
     async def decorated(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if teacher := backed_data.data.get('teacher'):
             if teacher == update.effective_user.name:
-                func(update, context)
+                await func(update, context)
             else:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id, text=f'Only teacher can perform this actions'
@@ -21,5 +21,7 @@ def teacher_only(func):
 
 def mutates_data(func):
     async def decorated(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        func(update, context)
+        await func(update, context)
         backed_data.save()
+
+    return decorated

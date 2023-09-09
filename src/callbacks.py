@@ -29,7 +29,7 @@ Name2
 /ignore name0 -- useful if chat has someone else apart from teacher and students
 ignored: name0, name4
 
-**/add name0** -- add students, removes them from ignored if necessary
+/add name0 -- add students, removes them from ignored if necessary
 students: name0, name1, name2, name3
 ignored: name4
 
@@ -57,11 +57,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @teacher_only
 @mutates_data
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if backed_data.data.get('teacher') == update.effective_user.name:
-        backed_data.data.clear()
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Bot was stopped')
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Only teacher can stop the bot')
+    backed_data.data.clear()
+    await context.bot.send_message(chat_id=update.effective_chat.id, text='Bot was stopped')
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,7 +72,7 @@ async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # TODO: shuffle instead of randint
         await context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"I've chosen {list(students)[randint(0, len(students))]}"
+            chat_id=update.effective_chat.id, text=f"I've chosen {list(students)[randint(0, len(students) - 1)]}"
         )
 
 
@@ -85,14 +82,30 @@ async def ignore(update: Update, context: ContextTypes.DEFAULT_TYPE):
     students = backed_data.data.get('students', {})
     outsiders = backed_data.data.get('outsiders', [])
 
-    async for candidate in context.args:
+    for candidate in context.args:
         if candidate in students:
-            outsiders.append(students.pop(candidate))
+            students.pop(candidate)
+            outsiders.append(candidate)
 
     backed_data.data['outsiders'] = outsiders
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=f'Ignored: {", ".join(outsiders)}'
-    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Ignored: {", ".join(outsiders)}')
+
+
+@teacher_only
+@mutates_data
+async def present(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    students = backed_data.data.get('students', {})
+    for candidate in context.args:
+        if candidate not in students:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id, text=f'No such student {candidate}. Skipping ...'
+            )
+            continue
+
+        students[candidate]['attendance'] += 1
+
+    response = '\n'.join([f'{student} {metrics["attendance"]}' for student, metrics in students.items()])
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
 
 @teacher_only
@@ -104,22 +117,37 @@ async def grade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1 or context.args[0] not in allowed_grades:
         await context.bot.send_message(chat_id=update.effective_chat.id, text='Grade +/- not specified')
     else:
-        is_positive = context.args[0] = '+'
+        is_positive = context.args[0] == '+'
 
-        async for candidate in context.args[1:]:
+        for candidate in context.args[1:]:
             if candidate not in students:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id, text=f'No such student {candidate}. Skipping ...'
                 )
                 continue
 
-            students[candidate] += 1 if is_positive else -1
+            students[candidate]['points'] += 1 if is_positive else -1
+
+    stats = []
+    for student, metrics in students.items():
+        if metrics["points"] > 0:
+            mark = '+' * metrics["points"]
+        else:
+            mark = '-' * -metrics["points"]
+        stats.append(f'{student} {mark}')
+
+    response = '\n'.join(sorted(stats))
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
 
 
 @teacher_only
+@mutates_data
 async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    backed_data.data['students'] = {candidate: {'points': 0, 'attendance': 0} async for candidate in context.args}
+    students = backed_data.data.get('students', {})
+    new_students = set(context.args) - set(students)
+    students.update({student: {'points': 0, 'attendance': 0} for student in new_students})
+
+    backed_data.data['students'] = students
     backed_data.data['outsiders'] = list(
         set(backed_data.data.get('outsiders', [])) - set(list(backed_data.data['students']))
     )
-    backed_data.save()

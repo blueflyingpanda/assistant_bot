@@ -1,6 +1,6 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
-from callbacks import help, start, stop, unknown, randomize, ignore, grade, add
+from callbacks import help, start, stop, unknown, randomize, ignore, grade, add, present
 
 HANDLERS = (
     CommandHandler('help', help),
@@ -10,5 +10,6 @@ HANDLERS = (
     CommandHandler('ignore', ignore),
     CommandHandler('grade', grade),
     CommandHandler('add', add),
+    CommandHandler('present', present),
     MessageHandler(filters.COMMAND, unknown)
 )
