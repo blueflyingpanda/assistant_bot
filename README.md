@@ -27,9 +27,7 @@ Name3 -
 
 Name2
 
-**/ignore name0** -- useful if chat has someone else apart from teacher and students
-
-ignored: name0, name4
+**/ignore name0** -- specified users are no longer considered students
 
 **/register** -- every student presses this button
 
