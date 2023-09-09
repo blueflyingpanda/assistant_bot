@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackContext
 from data import backed_data
 from random import randint
 
@@ -151,3 +151,17 @@ async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     backed_data.data['outsiders'] = list(
         set(backed_data.data.get('outsiders', [])) - set(list(backed_data.data['students']))
     )
+
+
+async def timer(update: Update, context: CallbackContext):
+
+    async def timer_callback(_context: CallbackContext):
+        await _context.bot.send_message(chat_id=_context.job.chat_id, text="Time's up!")
+
+    minutes = 0
+    max_minutes = 1440
+    if context.args and context.args[0].isdigit() and minutes <= max_minutes:
+        minutes = int(context.args[0])
+    await update.message.reply_text(f'Timer started for {minutes} minutes.')
+
+    context.job_queue.run_once(timer_callback, minutes * 60, chat_id=update.message.chat_id)
