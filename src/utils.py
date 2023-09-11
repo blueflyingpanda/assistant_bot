@@ -1,3 +1,5 @@
+from typing import Optional
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -14,7 +16,7 @@ async def display_students_attendance(students_info: dict, update: Update, conte
         await display_no_students(update, context)
 
 
-async def get_username(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> str | None:
+async def get_username(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
     username = None
     try:
         chat = await context.bot.get_chat(user_id)
