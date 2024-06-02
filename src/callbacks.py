@@ -35,6 +35,9 @@ student name0 registered
 Timer set for 5 minutes
 …
 Times up!
+
+TODO:
+/stats
 """
 
     await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text)

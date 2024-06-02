@@ -1,1 +1,3 @@
 python-telegram-bot[all]
+sqlalchemy
+psycopg2-binary

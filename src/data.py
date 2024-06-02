@@ -14,4 +14,4 @@ class JSONBackedMapping:
             json.dump(self.data, fw)
 
 
-backed_data = JSONBackedMapping('data/data.json')
+backed_data = JSONBackedMapping('data.json')
