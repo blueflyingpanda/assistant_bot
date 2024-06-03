@@ -1,10 +1,13 @@
+from datetime import date
+from random import randint
+
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
-from data import backed_data
-from random import randint
-from utils import display_students_attendance, get_username, display_no_students
 
+from data import backed_data
+from db import Course, Session, User, UserCourseAssociation
 from decorators import teacher_only, mutates_data
+from utils import display_students_attendance, display_no_students
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,25 +38,77 @@ student name0 registered
 Timer set for 5 minutes
 …
 Times up!
-
-TODO:
-/stats
 """
 
+    # TODO:
+    # /stats
+    # /add_teacher
     await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text)
 
 
 @mutates_data
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if teacher_id := backed_data.data.get('teacher'):
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f'Current teacher is {await get_username(teacher_id, context)}'
+    chat = update.effective_chat
+    chat_title = chat.title
+
+    if not chat_title:
+        await update.message.reply_text('This chat does not have a title.')
+        return
+
+    # TODO: many groups in one chat
+    group_title, _, course_title = chat_title.partition(' ')
+
+    if not (group_title and course_title):
+        await update.message.reply_text('Wrong chat title! Should follow the pattern <group> <course>.')
+        return
+
+    with Session() as session:
+
+        course = session.query(Course).filter_by(
+            title=course_title, year=date.today().year, group=group_title
+        ).first()
+
+        if course:
+            await update.message.reply_text(
+                text=f'Course already exists: {course.tg_link}'
+            )
+            return
+
+        # TODO: handle cases where the link might expire
+        invite_link = await context.bot.export_chat_invite_link(chat.id)
+
+        course = Course(
+            title=course_title,
+            group=group_title,
+            year=date.today().year,
+            tg_link=invite_link
         )
-    else:
-        backed_data.data['teacher'] = update.effective_user.id
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id, text=f"New teacher is {update.effective_user.name}"
+
+        user = update.effective_user
+        teacher = session.query(User).filter_by(tg_id=user.id).first()
+
+        if not teacher:
+            teacher = User(
+                tg_id=user.id,
+                username=user.username,
+                name=user.full_name
+            )
+
+        # link the user and the course, indicating that the user is a teacher
+        assoc = UserCourseAssociation(teacher=True)
+        assoc.user = teacher
+
+        course.users.append(assoc)
+
+        session.add_all((course, teacher, assoc))
+        session.commit()
+
+        await update.message.reply_text(
+            'Chat created successfully.\n'
+            f'Course: {course.title}\n'
+            f'Year: {course.year}\n'
+            f'Group: {course.group}\n'
+            f'Teacher: {teacher.name}'
         )
 
 

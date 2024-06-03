@@ -3,9 +3,7 @@ from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from logging import getLogger
-
-logger = getLogger(__file__)
+from log import logger
 
 
 async def display_students_attendance(students_info: dict, update: Update, context: ContextTypes.DEFAULT_TYPE):

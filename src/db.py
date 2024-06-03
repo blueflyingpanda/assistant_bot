@@ -1,80 +1,85 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Date, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from datetime import date
+
+from sqlalchemy import create_engine, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship, sessionmaker
+
+from log import ALCHEMY_ECHO
 
 Base = declarative_base()
 
 
-class Group(Base):
-    __tablename__ = 'groups'
+class UserCourseAssociation(Base):
+    """intermediate table for users related to courses"""
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String, unique=True, nullable=False)
-    year = Column(Integer, nullable=False)
+    __tablename__ = "users_courses"
 
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey('courses.id'), primary_key=True)
 
-class Course(Base):
-    __tablename__ = 'courses'
+    teacher: Mapped[bool] = mapped_column(default=False)
 
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    year = Column(Integer)
-    teachers = Column(Integer)
-    exam_weight = Column(Integer)
-
-class Lesson(Base):
-    __tablename__ = 'lessons'
-
-    id = Column(Integer, primary_key=True)
-    title = Column(String)
-    type = Column(Integer)
-    date = Column(Date)
-    course_id = Column(Integer, ForeignKey('courses.id'))
-    course = relationship("Course", back_populates="lessons")
+    user: Mapped['User'] = relationship(back_populates='courses')
+    course: Mapped['Course'] = relationship(back_populates='users')
 
 
 class User(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    tg_id = Column(Integer, unique=True, nullable=False)
-    username = Column(String, nullable=False)
-    name = Column(String)
-    phone = Column(String)
-    group_id = Column(Integer, ForeignKey('groups.id'))
-    group = relationship("Group", back_populates="users")
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tg_id: Mapped[int] = mapped_column(unique=True)
+    username: Mapped[str | None]
+    name: Mapped[str | None]
+
+    attendances: Mapped[list['Attendance']] = relationship(back_populates='user')
+    courses: Mapped[list['UserCourseAssociation']] = relationship(back_populates='user')
+
+
+class Course(Base):
+    __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint('title', 'year', 'group', name='uq_title_year_group'),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str]
+    year: Mapped[int]
+    exam_weight: Mapped[int | None] = mapped_column(comment='exam weight in percent', default=40)
+    tg_link: Mapped[str] = mapped_column(unique=True)
+    group: Mapped[str]
+
+    lessons: Mapped[list['Lesson']] = relationship(back_populates='course')
+    users: Mapped[list['UserCourseAssociation']] = relationship(back_populates='course')
+
+
+class Lesson(Base):
+    __tablename__ = "lessons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str]
+    type: Mapped[int] = mapped_column(comment='0-lecture 1-lab 2-seminar')
+    date: Mapped[date]
+    course_id: Mapped[int] = mapped_column(ForeignKey('courses.id'))
+
+    course: Mapped['Course'] = relationship(back_populates='lessons')
+    attendances: Mapped[list['Attendance']] = relationship(back_populates='lesson')
 
 
 class Attendance(Base):
-    __tablename__ = 'attendances'
+    __tablename__ = "attendances"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    user = relationship("User", back_populates="attendances")
-    lesson_id = Column(Integer, ForeignKey('lessons.id'))
-    lesson = relationship("Lesson", back_populates="attendances")
-    grade = Column(Integer)
-    participation = Column(Boolean, default=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    lesson_id: Mapped[int] = mapped_column(ForeignKey('lessons.id'))
+    grade: Mapped[int | None]
+    participation: Mapped[bool] = mapped_column(default=False)
 
-
-class UserCourse(Base):
-    __tablename__ = 'users_courses'
-
-    user_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
-    course_id = Column(Integer, ForeignKey('courses.id'), primary_key=True)
-    teacher = Column(Boolean, default=False)
-
-    user = relationship("User", back_populates="courses")
-    course = relationship("Course", back_populates="users")
+    user: Mapped['User'] = relationship(back_populates='attendances')
+    lesson: Mapped['Lesson'] = relationship(back_populates='attendances')
 
 
-# Define relationships
-User.courses = relationship("Course", secondary="users_courses", back_populates="users")
-Course.users = relationship("User", secondary="users_courses", back_populates="courses")
-Lesson.attendances = relationship("Attendance", back_populates="lesson")
-User.attendances = relationship("Attendance", back_populates="user")
-Group.users = relationship("User", back_populates="group")
+engine = create_engine('postgresql://bot:bot@localhost:5432/bot', echo=ALCHEMY_ECHO)
+Session = sessionmaker(bind=engine)
 
-# Create an engine and tables
-engine = create_engine('postgresql://bot:bot@localhost:5432/bot', echo=True)
-Base.metadata.create_all(engine)
+
+if __name__ == '__main__':
+    Base.metadata.create_all(engine)

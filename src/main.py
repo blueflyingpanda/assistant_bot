@@ -2,15 +2,16 @@ from os import environ
 
 from telegram.ext import ApplicationBuilder
 
-from handlers import HANDLERS
+from handlers import HANDLERS, error_handler
 
 BOT_TOKEN = environ.get('BOT_TOKEN')
 if not BOT_TOKEN:
     raise Exception('Missing bot token! Add the token to environment variable BOT_TOKEN')
 
 application = ApplicationBuilder().token(BOT_TOKEN).build()
-for handler in HANDLERS:
-    application.add_handler(handler)
+
+application.add_handlers(HANDLERS)
+application.add_error_handler(error_handler)
 
 
 def main():
