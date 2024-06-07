@@ -26,9 +26,9 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tg_id: Mapped[int] = mapped_column(unique=True)
-    username: Mapped[str | None]
-    name: Mapped[str | None]
+    tg_id: Mapped[str] = mapped_column(unique=True, index=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    name: Mapped[str]
 
     attendances: Mapped[list['Attendance']] = relationship(back_populates='user')
     courses: Mapped[list['UserCourseAssociation']] = relationship(back_populates='user')
@@ -37,14 +37,14 @@ class User(Base):
 class Course(Base):
     __tablename__ = "courses"
     __table_args__ = (
-        UniqueConstraint('title', 'year', 'group', name='uq_title_year_group'),
+        UniqueConstraint('title', 'group', name='uq_title_year_group'),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[str] = mapped_column(unique=True, index=True)
     title: Mapped[str]
     year: Mapped[int]
     exam_weight: Mapped[int | None] = mapped_column(comment='exam weight in percent', default=40)
-    tg_link: Mapped[str] = mapped_column(unique=True)
     group: Mapped[str]
 
     lessons: Mapped[list['Lesson']] = relationship(back_populates='course')
@@ -71,14 +71,14 @@ class Attendance(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     lesson_id: Mapped[int] = mapped_column(ForeignKey('lessons.id'))
     grade: Mapped[int | None]
-    participation: Mapped[bool] = mapped_column(default=False)
+    participation: Mapped[bool | None]
 
     user: Mapped['User'] = relationship(back_populates='attendances')
     lesson: Mapped['Lesson'] = relationship(back_populates='attendances')
 
 
 engine = create_engine('postgresql://bot:bot@localhost:5432/bot', echo=ALCHEMY_ECHO)
-Session = sessionmaker(bind=engine)
+Session = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 if __name__ == '__main__':

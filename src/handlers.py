@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
-from callbacks import help, start, stop, unknown, randomize, ignore, grade, register, present, timer
+from callbacks import help, start, stop, unknown, randomize, ignore, grade, register, present, timer, lesson
 from log import logger
 
 HANDLERS = (
@@ -14,6 +14,7 @@ HANDLERS = (
     CommandHandler('register', register),
     CommandHandler('present', present),
     CommandHandler('timer', timer),
+    CommandHandler('lesson', lesson),
     MessageHandler(filters.COMMAND, unknown)
 )
 

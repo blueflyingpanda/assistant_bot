@@ -1,27 +1,32 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from data import backed_data
+from data import DataStorage
+from exceptions import NotFoundError
+from log import logger
 
 
 def teacher_only(func):
+    """Basic role model restriction"""
     async def decorated(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if teacher_id := backed_data.data.get('teacher'):
-            if teacher_id == update.effective_user.id:
-                await func(update, context)
-            else:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id, text=f'Only teacher can perform this action'
-                )
+
+        chat_id = update.effective_chat.id
+        tg_user_id = f'{update.effective_user.id}'
+
+        ds = DataStorage(chat_id)
+        try:
+            is_teacher = ds.check_is_teacher(tg_user_id)
+        except NotFoundError as e:
+            msg = f'{chat_id}: {e.__doc__}'
+            logger.warning(msg)
+            return await context.bot.send_message(chat_id=chat_id, text='Teacher should start the bot first')
+
+        if is_teacher:
+            await func(update, context)
         else:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Press /start to be a teacher')
-
-    return decorated
-
-
-def mutates_data(func):
-    async def decorated(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await func(update, context)
-        backed_data.save()
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f'Only teacher can perform this action. If you are a teacher, press /start'
+            )
 
     return decorated

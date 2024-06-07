@@ -1,13 +1,15 @@
 from datetime import date
+from functools import partial
 from random import randint
 
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 
-from data import backed_data
-from db import Course, Session, User, UserCourseAssociation
-from decorators import teacher_only, mutates_data
-from utils import display_students_attendance, display_no_students
+from data import DataStorage, UserInfo, PARTICIPATION_TYPES
+from decorators import teacher_only
+from exceptions import LogicError, NotFoundError
+from log import logger
+from bot import Bot
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -21,9 +23,8 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Name1 1
 Name2 3
 
-/grade +- name1 name2 -- rule's 1st argument is an option + (for prepared students) or - (for unprepared students)
+/grade <+- or 0-10> name1 name2 -- rule's 1st argument is an option + (for prepared students) or - (for unprepared students)
 Name1 ++
-Name2
 Name3 -
 
 /random -- saves you the trouble of choosing who will go to the blackboard
@@ -38,210 +39,197 @@ student name0 registered
 Timer set for 5 minutes
 …
 Times up!
+
+/lesson title -- begins a lesson
 """
 
-    # TODO:
-    # /stats
-    # /add_teacher
+    # TODO: /stats /add_teacher
     await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text)
 
 
-@mutates_data
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     chat_title = chat.title
+    chat_id = chat.id
 
     if not chat_title:
-        await update.message.reply_text('This chat does not have a title.')
-        return
+        return await update.message.reply_text('This chat does not have a title.')
 
     # TODO: many groups in one chat
     group_title, _, course_title = chat_title.partition(' ')
 
     if not (group_title and course_title):
-        await update.message.reply_text('Wrong chat title! Should follow the pattern <group> <course>.')
-        return
+        return await update.message.reply_text('Wrong chat title! Should follow the pattern <group> <course>.')
 
-    with Session() as session:
+    tg_user = update.effective_user
+    user_info = UserInfo(f'{tg_user.id}', tg_user.username, tg_user.full_name)
 
-        course = session.query(Course).filter_by(
-            title=course_title, year=date.today().year, group=group_title
-        ).first()
+    ds = DataStorage(chat_id)
 
-        if course:
-            await update.message.reply_text(
-                text=f'Course already exists: {course.tg_link}'
-            )
-            return
+    exists, course_info = ds.get_or_create_course(
+        user_info=user_info, title=course_title, group=group_title
+    )
 
-        # TODO: handle cases where the link might expire
-        invite_link = await context.bot.export_chat_invite_link(chat.id)
-
-        course = Course(
-            title=course_title,
-            group=group_title,
-            year=date.today().year,
-            tg_link=invite_link
+    if exists:
+        invite_link = await context.bot.export_chat_invite_link(chat_id)
+        return await update.message.reply_text(
+            text=f'Course already exists: {invite_link}'
         )
 
-        user = update.effective_user
-        teacher = session.query(User).filter_by(tg_id=user.id).first()
+    course = course_info.course
+    teacher = course_info.teachers[0]
 
-        if not teacher:
-            teacher = User(
-                tg_id=user.id,
-                username=user.username,
-                name=user.full_name
-            )
-
-        # link the user and the course, indicating that the user is a teacher
-        assoc = UserCourseAssociation(teacher=True)
-        assoc.user = teacher
-
-        course.users.append(assoc)
-
-        session.add_all((course, teacher, assoc))
-        session.commit()
-
-        await update.message.reply_text(
-            'Chat created successfully.\n'
-            f'Course: {course.title}\n'
-            f'Year: {course.year}\n'
-            f'Group: {course.group}\n'
-            f'Teacher: {teacher.name}'
-        )
+    await update.message.reply_text(
+        'Chat created successfully.\n'
+        f'Course: {course.title}\n'
+        f'Year: {course.year}\n'
+        f'Group: {course.group}\n'
+        f'Teacher: {teacher.name}'
+    )
 
 
-@teacher_only
-@mutates_data
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    backed_data.data.clear()
-    await context.bot.send_message(chat_id=update.effective_chat.id, text='Bot was stopped')
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Bot cannot be stopped 👹\n'
+             'Kick it from the chat.'
+    )
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if msg := update.effective_message.text:
+        logger.warning(msg)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I didn't understand that command")
 
 
 async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    students = backed_data.data.get('students')
+    chat_id = update.effective_chat.id
+    ds = DataStorage(chat_id)
+
+    students = ds.get_presented()
     if not students:
-        await display_no_students(update, context)
+        await Bot.display_no_students(update, context)
     else:
-        # TODO: shuffle instead of randint
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"I've chosen {[student['name'] for student in students.values()][randint(0, len(students) - 1)]}"
+            text=f"I've chosen {students[randint(0, len(students) - 1)]}"
         )
 
 
 @teacher_only
-@mutates_data
 async def ignore(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    students = backed_data.data.get('students', {})
+    chat_id = update.effective_chat.id
+    if len(candidates := context.args) != 1:
+        return await context.bot.send_message(chat_id=chat_id, text='Please specify one student')
+    try:
+        ds = DataStorage(chat_id)
+        ds.remove_student(candidates[0].lstrip('@'))
 
-    name_to_id = {
-        info['name']: student_id for student_id, info in students.items()
-    }
+    except NotFoundError as e:
+        msg = f'{chat_id}: {e.__doc__}'
+        logger.warning(msg)
+        return await context.bot.send_message(
+            chat_id=chat_id, text=f'{e.__doc__}'
+        )
 
-    for candidate in context.args:
-        if candidate in name_to_id:
-            students.pop(name_to_id[candidate])
+    except LogicError as e:
+        msg = f'{chat_id}: {e.args[0]}'
+        logger.warning(msg)
+        return await context.bot.send_message(chat_id=chat_id, text=e.args[0])
 
-    await context.bot.send_message(chat_id=update.effective_chat.id,
-                                   text=f'Specified users are no longer considered students. '
-                                        f'/register to make them students again '
-                                        f'but their progress is lost')
+    await context.bot.send_message(chat_id=chat_id,
+                                   text=f'Specified user is no longer considered a student. '
+                                        f'/register to make them student again')
 
 
 @teacher_only
-@mutates_data
 async def present(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    students = backed_data.data.get('students', {})
+    chat_id = update.effective_chat.id
+    candidates = {candidate.lstrip('@') for candidate in context.args}  # removing @ from username
 
-    name_to_info = {
-        info['name']: {'attendance': info['attendance'], 'id': student_id} for student_id, info in students.items()
-    }
+    if not candidates:
+        return await context.bot.send_message(chat_id=chat_id, text='Please specify present students')
 
-    for candidate in context.args:
-        if candidate not in name_to_info:
+    ds = DataStorage(chat_id)
+    try:
+        skipped = ds.mark_present(candidates)
+        if skipped:
             await context.bot.send_message(
-                chat_id=update.effective_chat.id, text=f'No such student {candidate}. Skipping ...'
+                chat_id=chat_id, text=f'Skipped: {", ".join(skipped)}'
             )
-            continue
+    except NotFoundError as e:
+        msg = f'{chat_id}: {e.__doc__}'
+        logger.warning(msg)
+        return await context.bot.send_message(
+            chat_id=chat_id, text='Lesson should be started before checking attendance. Press /lesson'
+        )
 
-        student = students[name_to_info[candidate]['id']]
-        student['attendance'] += 1
-        name_to_info[candidate]['attendance'] = student['attendance']  # will be used later to display information
-
-    await display_students_attendance(name_to_info, update, context)
+    attendances = ds.get_attendance()
+    await Bot.display_attendance(attendances, update, context)
 
 
 @teacher_only
-@mutates_data
 async def grade(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    allowed_grades = ('+', '-')
-    students = backed_data.data.get('students', {})
+    chat_id = update.effective_chat.id
 
-    name_to_info = {
-        info['name']: {'points': info['points'], 'id': student_id} for student_id, info in students.items()
-    }
+    common_marks = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'}
+    bonus_marks = set(PARTICIPATION_TYPES.keys())
+    allowed_marks = common_marks | bonus_marks
 
-    if len(context.args) < 1 or context.args[0] not in allowed_grades:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Grade +/- not specified')
-    else:
-        is_positive = context.args[0] == '+'
+    candidates = {candidate.lstrip('@') for candidate in context.args[1:]}
+    ds = DataStorage(chat_id)
 
-        for candidate in context.args[1:]:
-            if candidate not in name_to_info:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id, text=f'No such student {candidate}. Skipping ...'
-                )
-                continue
-            student = students[name_to_info[candidate]['id']]
-            student['points'] += 1 if is_positive else -1
-            name_to_info[candidate]['points'] = student['points']  # will be used later to display information
+    if len(context.args) < 1 or ((mark := context.args[0]) not in allowed_marks):
+        return await context.bot.send_message(chat_id=update.effective_chat.id, text='Grade not specified')
 
-    stats = []
-    for name, info in name_to_info.items():
-        points = info['points']
-        if points > 0:
-            mark = '+' * points
-        else:
-            mark = '-' * -points
-        stats.append(f'{name} {mark}')
+    display_func = Bot.display_participation
+    get_performance = ds.get_performance
 
-    response = '\n'.join(sorted(stats))
+    if mark.isdigit():
+        mark = int(mark)
+        display_func = Bot.display_grades
+        get_performance = partial(get_performance, fetch_grades=True)
 
-    if response:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=response)
-    else:
-        await display_no_students(update, context)
+    try:
+        skipped = ds.grade_students(candidates, mark)
+    except NotFoundError as e:
+        msg = f'{chat_id}: {e.__doc__}'
+        logger.warning(msg)
+        return await context.bot.send_message(
+            chat_id=chat_id, text='Lesson should be started before grading students. Press /lesson'
+        )
+
+    if skipped:
+        await context.bot.send_message(
+            chat_id=chat_id, text=f'Skipped: {", ".join(skipped)}'
+        )
+
+    performance_by_student = get_performance()
+    await display_func(performance_by_student, update, context)
 
 
-@mutates_data
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if teacher := backed_data.data.get('teacher'):
-        if int(teacher) == update.effective_user.id:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text='Teacher cannot be registered as student'
-            )
-        else:
-            students = backed_data.data.get('students', {})
-            student_id = f'{update.effective_user.id}'
+    chat_id = update.effective_chat.id
+    tg_user = update.effective_user
+    user_id = f'{tg_user.id}'
 
-            if student_id not in students:
-                students[student_id] = {'points': 0, 'attendance': 0, 'name': update.effective_user.name}
-            else:
-                # if user changed the username
-                students[student_id]['name'] = update.effective_user.name
+    ds = DataStorage(chat_id)
+    user_info = UserInfo(user_id, tg_user.username, tg_user.full_name)
 
-            backed_data.data['students'] = students
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text=f'student {update.effective_user.name} registered'
-            )
-    else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Teacher should start the bot first')
+    try:
+        ds.add_student(user_info)
+    except LogicError as e:
+        msg = f'{chat_id}: {e.args[0]}'
+        logger.warning(msg)
+        return await context.bot.send_message(chat_id=chat_id, text=e.args[0])
+    except NotFoundError as e:
+        msg = f'{chat_id}: {e.__doc__}'
+        logger.warning(msg)
+        return await context.bot.send_message(chat_id=chat_id, text='Teacher should start the bot first')
+
+    await context.bot.send_message(
+        chat_id=chat_id, text=f'student {tg_user.full_name or tg_user.username} registered'
+    )
 
 
 async def timer(update: Update, context: CallbackContext):
@@ -255,3 +243,14 @@ async def timer(update: Update, context: CallbackContext):
     await update.message.reply_text(f'Timer started for {minutes} minutes.')
 
     context.job_queue.run_once(timer_callback, minutes * 60, chat_id=update.message.chat_id)
+
+
+@teacher_only
+async def lesson(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    title = ' '.join(context.args)
+    ds = DataStorage(chat_id)
+    ds.start_lesson(title, date.today())
+
+    message = await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Started lesson {title}')
+    await context.bot.pin_chat_message(chat_id=chat_id, message_id=message.message_id)
