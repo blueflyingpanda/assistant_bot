@@ -1,4 +1,4 @@
-SRC_DIR := lite
+SRC_DIR := src
 BUILD_DIR := build
 BUILD_ARC := build.zip
 
