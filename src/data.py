@@ -99,7 +99,7 @@ class DataStorage:
                 result = await session.execute(
                     select(User).where(User.tg_id == user_info.id)
                 )
-                teacher = result.fetchone()
+                teacher = result.first()
 
                 if not teacher:
                     teacher = User(
@@ -125,7 +125,7 @@ class DataStorage:
         result = await session.execute(
             select(User).where(User.tg_id == tg_id)
         )
-        student = result.fetchone()
+        student = result.first()
 
         if not student and loud:
             raise StudentNotFoundError()
@@ -336,7 +336,7 @@ class DataStorage:
             result = await session.execute(
                 select(User).filter(User.username == username)
             )
-            user = result.fetchone()
+            user = result.first()
 
             if not user:
                 raise StudentNotFoundError()
