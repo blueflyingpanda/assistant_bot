@@ -241,8 +241,10 @@ class DataStorage:
             stmt = (
                 select(User.username, Attendance)
                 .join(User, Attendance.user_id == User.id)
+                .join(UserCourseAssociation, UserCourseAssociation.user_id == User.id)
                 .where(Attendance.lesson_id == course.lessons[-1].id)
-                .where(User.username.in_(candidates))
+                .where(User.username.in_(candidates)
+                .where(UserCourseAssociation.course_id == course.id))
             )
 
             result = await session.execute(stmt)
