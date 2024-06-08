@@ -66,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ds = DataStorage(chat_id)
 
-    exists, course_info = ds.get_or_create_course(
+    exists, course_info = await ds.get_or_create_course(
         user_info=user_info, title=course_title, group=group_title
     )
 
@@ -106,7 +106,7 @@ async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     ds = DataStorage(chat_id)
 
-    students = ds.get_presented()
+    students = await ds.get_presented()
     if not students:
         await Bot.display_no_students(update, context)
     else:
@@ -123,7 +123,7 @@ async def ignore(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await context.bot.send_message(chat_id=chat_id, text='Please specify one student')
     try:
         ds = DataStorage(chat_id)
-        ds.remove_student(candidates[0].lstrip('@'))
+        await ds.remove_student(candidates[0].lstrip('@'))
 
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
@@ -152,7 +152,7 @@ async def present(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ds = DataStorage(chat_id)
     try:
-        skipped = ds.mark_present(candidates)
+        skipped = await ds.mark_present(candidates)
         if skipped:
             await context.bot.send_message(
                 chat_id=chat_id, text=f'Skipped: {", ".join(skipped)}'
@@ -164,7 +164,7 @@ async def present(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id, text='Lesson should be started before checking attendance. Press /lesson'
         )
 
-    attendances = ds.get_attendance()
+    attendances = await ds.get_attendance()
     await Bot.display_attendance(attendances, update, context)
 
 
@@ -191,7 +191,7 @@ async def grade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         get_performance = partial(get_performance, fetch_grades=True)
 
     try:
-        skipped = ds.grade_students(candidates, mark)
+        skipped = await ds.grade_students(candidates, mark)
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
         logger.warning(msg)
@@ -204,7 +204,7 @@ async def grade(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id, text=f'Skipped: {", ".join(skipped)}'
         )
 
-    performance_by_student = get_performance()
+    performance_by_student = await get_performance()
     await display_func(performance_by_student, update, context)
 
 
@@ -217,7 +217,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_info = UserInfo(user_id, tg_user.username, tg_user.full_name)
 
     try:
-        ds.add_student(user_info)
+        await ds.add_student(user_info)
     except LogicError as e:
         msg = f'{chat_id}: {e.args[0]}'
         logger.warning(msg)
@@ -250,7 +250,7 @@ async def lesson(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     title = ' '.join(context.args)
     ds = DataStorage(chat_id)
-    ds.start_lesson(title, date.today())
+    await ds.start_lesson(title, date.today())
 
     message = await context.bot.send_message(chat_id=update.effective_chat.id, text=f'Started lesson {title}')
     await context.bot.pin_chat_message(chat_id=chat_id, message_id=message.message_id)

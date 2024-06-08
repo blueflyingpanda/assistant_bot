@@ -1,5 +1,6 @@
 from os import environ
 
+import asyncio
 from telegram.ext import ApplicationBuilder
 
 from handlers import HANDLERS, error_handler

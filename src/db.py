@@ -1,11 +1,15 @@
+import asyncio
 from datetime import date
 
-from sqlalchemy import create_engine, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import declarative_base, mapped_column, Mapped, relationship, sessionmaker
+from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
+from sqlalchemy.orm import mapped_column, Mapped, relationship, DeclarativeBase
 
 from log import ALCHEMY_ECHO
 
-Base = declarative_base()
+
+class Base(DeclarativeBase, AsyncAttrs):
+    """Base model"""
 
 
 class UserCourseAssociation(Base):
@@ -77,9 +81,17 @@ class Attendance(Base):
     lesson: Mapped['Lesson'] = relationship(back_populates='attendances')
 
 
-engine = create_engine('postgresql://bot:bot@localhost:5432/bot', echo=ALCHEMY_ECHO)
-Session = sessionmaker(bind=engine, expire_on_commit=False)
+async_engine = create_async_engine('postgresql+asyncpg://bot:bot@localhost:5432/bot', echo=ALCHEMY_ECHO)
+ASession = async_sessionmaker(
+    bind=async_engine,
+    expire_on_commit=False,
+)
+
+
+async def main():
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 if __name__ == '__main__':
-    Base.metadata.create_all(engine)
+    asyncio.run(main())

@@ -5,17 +5,17 @@ from callbacks import help, start, stop, unknown, randomize, ignore, grade, regi
 from log import logger
 
 HANDLERS = (
-    CommandHandler('help', help),
-    CommandHandler('start', start),
-    CommandHandler('stop', stop),
-    CommandHandler('random', randomize),
-    CommandHandler('ignore', ignore),
-    CommandHandler('grade', grade),
-    CommandHandler('register', register),
-    CommandHandler('present', present),
-    CommandHandler('timer', timer),
-    CommandHandler('lesson', lesson),
-    MessageHandler(filters.COMMAND, unknown)
+    CommandHandler('help', help, block=False),
+    CommandHandler('start', start, block=False),
+    CommandHandler('stop', stop, block=False),
+    CommandHandler('random', randomize, block=False),
+    CommandHandler('ignore', ignore, block=False),
+    CommandHandler('grade', grade, block=False),
+    CommandHandler('register', register, block=False),
+    CommandHandler('present', present, block=False),
+    CommandHandler('timer', timer, block=False),
+    CommandHandler('lesson', lesson, block=False),
+    MessageHandler(filters.COMMAND, unknown, block=False)
 )
 
 
