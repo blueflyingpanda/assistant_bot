@@ -99,7 +99,7 @@ class DataStorage:
                 result = await session.execute(
                     select(User).where(User.tg_id == user_info.id)
                 )
-                teacher = result.first()
+                teacher = result.scalars().first()
 
                 if not teacher:
                     teacher = User(
@@ -125,7 +125,7 @@ class DataStorage:
         result = await session.execute(
             select(User).where(User.tg_id == tg_id)
         )
-        student = result.first()
+        student = result.scalars().first()
 
         if not student and loud:
             raise StudentNotFoundError()
@@ -137,7 +137,7 @@ class DataStorage:
         assoc = UserCourseAssociation(teacher=False)
         assoc.user = student
 
-        course.users.append(assoc)
+        (await course.awaitable_attrs.users).append(assoc)
 
         session.add_all((course, student, assoc))
 
@@ -336,7 +336,7 @@ class DataStorage:
             result = await session.execute(
                 select(User).filter(User.username == username)
             )
-            user = result.first()
+            user = result.scalars().first()
 
             if not user:
                 raise StudentNotFoundError()
