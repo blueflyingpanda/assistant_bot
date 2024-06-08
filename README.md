@@ -9,37 +9,28 @@ Assistant bot for teachers to manage the studying process in telegram chat
 
 **/stop** -- only teacher can stop the bot
 
-**/present name1 name2** -- will increase the presence count for listed students by one.
-
+**/present** name1 name2 -- will increase the presence count for listed students by one.
 Name1 1
-
 Name2 3
 
-**/grade +- name1 name2** -- rule's 1st argument is an option + (for prepared students) or - (for unprepared students)
-
+**/grade** <+- or 0-10> name1 name2 -- rule's 1st argument is an option + (for prepared students) or - (for unprepared students)
 Name1 ++
-
-Name2
-
 Name3 -
 
 **/random** -- saves you the trouble of choosing who will go to the blackboard
-
 Name2
 
-**/ignore name0** -- specified users are no longer considered students
+**/ignore** name0 -- specified users are no longer considered students
 
-**/register** -- every student presses this button
-
+**/register** every student presses this button
 student name0 registered
 
-**/timer N** -- sets the timer for N minutes
-
+**/timer** N -- sets the timer for N minutes
 Timer set for 5 minutes
-
 …
-
 Times up!
+
+**/lesson** title -- begins a lesson
 
 # configuration
 

@@ -4,7 +4,7 @@ from datetime import date
 
 from sqlalchemy import select, func
 
-from db import User, Course, Session, UserCourseAssociation, Lesson, Attendance
+from db import User, Course, ASession, UserCourseAssociation, Lesson, Attendance
 from exceptions import LogicError, CourseNotFoundError, StudentNotFoundError, LessonNotFoundError
 from log import logger
 
@@ -51,10 +51,11 @@ class DataStorage:
                 .subquery()
             )
 
-    def _get_course(self, session: Session, loud: bool = False) -> CourseInfo | None:
-        course = session.query(Course).filter_by(
-            chat_id=self.chat_id
-        ).first()
+    async def _get_course(self, session: ASession, loud: bool = False) -> CourseInfo | None:
+        result = await session.execute(
+            select(Course).where(Course.chat_id == self.chat_id)
+        )
+        course = result.scalars().first()
 
         if not course:
             if loud:
@@ -63,28 +64,28 @@ class DataStorage:
             return None
 
         stmt = select(UserCourseAssociation).where(UserCourseAssociation.course_id == course.id)
-        result = session.execute(stmt)
+        result = await session.execute(stmt)
 
         students = []
         teachers = []
 
         for association in result.scalars().all():
             if association.teacher:
-                teachers.append(association.user)
+                teachers.append(await association.awaitable_attrs.user)
             else:
-                students.append(association.user)
+                students.append(await association.awaitable_attrs.user)
 
         return CourseInfo(students, teachers, course)
 
-    def get_course(self) -> CourseInfo | None:
-        with Session() as session:
-            return self._get_course(session)
+    async def get_course(self) -> CourseInfo | None:
+        async with ASession() as session:
+            return await self._get_course(session)
 
-    def get_or_create_course(self, user_info: UserInfo, title: str, group: str) -> tuple[bool, CourseInfo]:
+    async def get_or_create_course(self, user_info: UserInfo, title: str, group: str) -> tuple[bool, CourseInfo]:
         """:return: pair where first element is True if course exists, else False"""
 
-        with Session() as session:
-            course_info = self._get_course(session)
+        async with ASession() as session:
+            course_info = await self._get_course(session)
             exists = course_info is not None
 
             if not exists:
@@ -95,7 +96,10 @@ class DataStorage:
                     year=date.today().year,
                 )
 
-                teacher = session.query(User).filter_by(tg_id=user_info.id).first()
+                result = await session.execute(
+                    select(User).where(User.tg_id == user_info.id)
+                )
+                teacher = result.scalars().first()
 
                 if not teacher:
                     teacher = User(
@@ -111,37 +115,40 @@ class DataStorage:
                 course.users.append(assoc)
 
                 session.add_all((course, teacher, assoc))
-                session.commit()
+                await session.commit()
 
                 course_info = CourseInfo(students=[], teachers=[teacher], course=course)
 
             return exists, course_info
 
-    def _get_user(self, session: Session, tg_id: str, loud: bool = False) -> User | None:
-        student = session.query(User).filter_by(tg_id=tg_id).first()
+    async def _get_user(self, session: ASession, tg_id: str, loud: bool = False) -> User | None:
+        result = await session.execute(
+            select(User).where(User.tg_id == tg_id)
+        )
+        student = result.scalars().first()
 
         if not student and loud:
             raise StudentNotFoundError()
 
         return student
 
-    def _bind_student_with_course(self, session: Session, student: User, course: Course):
+    async def _bind_student_with_course(self, session: ASession, student: User, course: Course):
         # link the user and the course, indicating that the user is a student
         assoc = UserCourseAssociation(teacher=False)
         assoc.user = student
 
-        course.users.append(assoc)
+        (await course.awaitable_attrs.users).append(assoc)
 
         session.add_all((course, student, assoc))
 
-    def add_student(self, user_info: UserInfo):
-        with Session() as session:
-            course_info = self._get_course(session)
+    async def add_student(self, user_info: UserInfo):
+        async with ASession() as session:
+            course_info = await self._get_course(session)
 
             if not course_info:
                 raise CourseNotFoundError()
 
-            student = self._get_user(session, user_info.id)
+            student = await self._get_user(session, user_info.id)
 
             students_tg_ids = {st.tg_id for st in course_info.students}
             teachers_tg_ids = {teacher.tg_id for teacher in course_info.teachers}
@@ -164,43 +171,43 @@ class DataStorage:
                 student.name = user_info.full_name
 
             if student.tg_id not in students_tg_ids:
-                self._bind_student_with_course(session, student, course_info.course)
+                await self._bind_student_with_course(session, student, course_info.course)
 
             session.add(student)
-            session.commit()
+            await session.commit()
 
-    def check_is_teacher(self, tg_user_id: str) -> bool:
-        with Session() as session:
-            course_info = self._get_course(session, loud=True)
+    async def check_is_teacher(self, tg_user_id: str) -> bool:
+        async with ASession() as session:
+            course_info = await self._get_course(session, loud=True)
 
             teachers_tg_ids = {t.tg_id for t in course_info.teachers}
 
             return tg_user_id in teachers_tg_ids
 
-    def start_lesson(self, title: str, dt: date):
-        with Session() as session:
-            course_info = self._get_course(session, loud=True)
+    async def start_lesson(self, title: str, dt: date):
+        async with ASession() as session:
+            course_info = await self._get_course(session, loud=True)
             lesson = Lesson(
                 title=title,
-                type=LESSON_TYPES['lab'],  # TODO add support for other types
+                type=LESSON_TYPES['lab'],  # TODO add other types
                 date=dt,
                 course_id=course_info.course.id
             )
 
             session.add(lesson)
-            session.commit()
+            await session.commit()
 
-    def mark_present(self, candidates: set[str]) -> list[str]:
+    async def mark_present(self, candidates: set[str]) -> list[str]:
         """marks students as present and returns skipped candidates"""
-        with Session() as session:
-            course_info = self._get_course(session, loud=True)
+        async with ASession() as session:
+            course_info = await self._get_course(session, loud=True)
 
             course = course_info.course
 
-            if not course.lessons:
+            if not await course.awaitable_attrs.lessons:
                 raise LessonNotFoundError()
 
-            presented = set(self._get_presented(session))
+            presented = set(await self._get_presented(session))
             by_usernames = {st.username: st for st in course_info.students}
             skipped: list[str] = []
             attendances: list[Attendance] = []
@@ -215,17 +222,17 @@ class DataStorage:
                     skipped.append(candidate)
 
             session.add_all(attendances)
-            session.commit()
+            await session.commit()
 
             return skipped
 
-    def grade_students(self, candidates: set[str], mark: int | str) -> list[str]:
-        with Session() as session:
-            course_info = self._get_course(session, loud=True)
+    async def grade_students(self, candidates: set[str], mark: int | str) -> list[str]:
+        async with ASession() as session:
+            course_info = await self._get_course(session, loud=True)
 
             course = course_info.course
 
-            if not course.lessons:
+            if not await course.awaitable_attrs.lessons:
                 raise LessonNotFoundError()
 
             skipped: list[str] = []
@@ -238,7 +245,8 @@ class DataStorage:
                 .where(User.username.in_(candidates))
             )
 
-            result = session.execute(stmt).all()
+            result = await session.execute(stmt)
+            result = result.all()
 
             # Execute the query
             attendance_by_username: dict[str, Attendance] = dict(result)
@@ -254,14 +262,14 @@ class DataStorage:
                     skipped.append(candidate)
 
             session.add_all(performances)
-            session.commit()
+            await session.commit()
 
             return skipped
 
-    def get_attendance(self) -> dict[str, int]:
+    async def get_attendance(self) -> dict[str, int]:
         """returns usernames to amount of lessons they attended"""
 
-        with Session() as session:
+        async with ASession() as session:
             stmt = (
                 select(User.username, func.count(Attendance.id).label('attendance_count'))
                 .join(Attendance, Attendance.user_id == User.id)
@@ -272,12 +280,13 @@ class DataStorage:
                 .group_by(User.username)
             )
 
-            attendances = session.execute(stmt).all()
+            result = await session.execute(stmt)
+            attendances = result.all()
 
             return dict(attendances)
 
-    def get_performance(self, fetch_grades: bool = False) -> dict[str, list[int | bool]]:
-        with Session() as session:
+    async def get_performance(self, fetch_grades: bool = False) -> dict[str, list[int | bool]]:
+        async with ASession() as session:
             stmt = (
                 select(User.username, Attendance.grade if fetch_grades else Attendance.participation)
                 .join(Attendance, Attendance.user_id == User.id)
@@ -287,7 +296,8 @@ class DataStorage:
                 .where(User.id.in_(select(self.course_related_subquery.c.user_id)))
             )
 
-            performances = session.execute(stmt).all()
+            result = await session.execute(stmt)
+            performances = result.all()
 
             performance_by_student = defaultdict(list)
 
@@ -296,7 +306,7 @@ class DataStorage:
 
             return performance_by_student
 
-    def _get_presented(self, session: Session) -> list[str]:
+    async def _get_presented(self, session: ASession) -> list[str]:
         latest_lesson_date_subquery = (
             select(func.max(Lesson.id))
             .join(Course, Course.id == Lesson.course_id)
@@ -313,30 +323,36 @@ class DataStorage:
             .where(User.id.in_(select(self.course_related_subquery.c.user_id)))
         )
 
-        presented = session.execute(stmt).scalars().all()
+        result = await session.execute(stmt)
+        presented = result.scalars().all()
         return presented
 
-    def get_presented(self) -> list[str]:
-        with Session() as session:
-            return self._get_presented(session)
+    async def get_presented(self) -> list[str]:
+        async with ASession() as session:
+            return await self._get_presented(session)
 
-    def remove_student(self, username: str):
-        with Session() as session:
-            user = session.query(User).filter(User.username == username).first()
+    async def remove_student(self, username: str):
+        async with ASession() as session:
+            result = await session.execute(
+                select(User).filter(User.username == username)
+            )
+            user = result.scalars().first()
+
             if not user:
                 raise StudentNotFoundError()
-            course_info = self._get_course(session, loud=True)
+            course_info = await self._get_course(session, loud=True)
 
             course = course_info.course
-            user_course_assoc = session.execute(
+            result = await session.execute(
                 select(UserCourseAssociation)
                 .where(UserCourseAssociation.user_id == user.id)
                 .where(UserCourseAssociation.course_id == course.id)
                 .where(UserCourseAssociation.teacher.is_(False))
-            ).scalars().one_or_none()
+            )
+            user_course_assoc = result.scalars().one_or_none()
 
             if not user_course_assoc:
                 raise LogicError('User is not related to course as student')
 
-            session.delete(user_course_assoc)
-            session.commit()
+            await session.delete(user_course_assoc)
+            await session.commit()

@@ -15,7 +15,7 @@ def teacher_only(func):
 
         ds = DataStorage(chat_id)
         try:
-            is_teacher = ds.check_is_teacher(tg_user_id)
+            is_teacher = await ds.check_is_teacher(tg_user_id)
         except NotFoundError as e:
             msg = f'{chat_id}: {e.__doc__}'
             logger.warning(msg)
