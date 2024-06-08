@@ -1,11 +1,9 @@
-from os import environ
-
-import asyncio
 from telegram.ext import ApplicationBuilder
 
+from conf import BOT_TOKEN
 from handlers import HANDLERS, error_handler
 
-BOT_TOKEN = environ.get('BOT_TOKEN')
+
 if not BOT_TOKEN:
     raise Exception('Missing bot token! Add the token to environment variable BOT_TOKEN')
 

@@ -5,7 +5,11 @@ from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import mapped_column, Mapped, relationship, DeclarativeBase
 
+from conf import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 from log import ALCHEMY_ECHO
+
+
+DESCRIBE = False
 
 
 class Base(DeclarativeBase, AsyncAttrs):
@@ -81,7 +85,9 @@ class Attendance(Base):
     lesson: Mapped['Lesson'] = relationship(back_populates='attendances')
 
 
-async_engine = create_async_engine('postgresql+asyncpg://bot:bot@localhost:5432/bot', echo=ALCHEMY_ECHO)
+async_engine = create_async_engine(
+    f'postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}', echo=ALCHEMY_ECHO
+)
 ASession = async_sessionmaker(
     bind=async_engine,
     expire_on_commit=False,
@@ -89,8 +95,15 @@ ASession = async_sessionmaker(
 
 
 async def main():
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if DESCRIBE:
+        from sqlalchemy.sql.ddl import CreateTable
+        from sqlalchemy.dialects.postgresql import dialect
+        for table in Base.metadata.sorted_tables:
+            create_table_sql = f'{(CreateTable(table).compile(dialect=dialect()))}'
+            print(create_table_sql)
+    else:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 if __name__ == '__main__':

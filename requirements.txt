@@ -1,5 +1,4 @@
 python-telegram-bot[all]
 sqlalchemy
-asyncio
 asyncpg
 pytest
