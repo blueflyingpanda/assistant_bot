@@ -233,6 +233,14 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def timer(update: Update, context: CallbackContext):
+    """
+    NB: Timer won't work in serverless environment in a cloud function. Because of short life span of such function.
+    After invocation function processes updates and quits, Long-running tasks will not persist.
+
+    TODO: use jobs queues provided by cloud service.
+    For example, Timer can be implemented using triggers in yc:
+    https://yandex.cloud/en/docs/functions/operations/trigger/timer-create
+    """
     async def timer_callback(_context: CallbackContext):
         await _context.bot.send_message(chat_id=_context.job.chat_id, text="Time's up!")
 
