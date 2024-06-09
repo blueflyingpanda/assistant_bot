@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 
 from db import User, Course, ASession, UserCourseAssociation, Lesson, Attendance
 from exceptions import LogicError, CourseNotFoundError, StudentNotFoundError, LessonNotFoundError
-from log import logger
+from logs import custom_logger
 
 
 LESSON_TYPES = {
@@ -166,7 +166,7 @@ class DataStorage:
                 if student.tg_id in teachers_tg_ids:
                     raise LogicError('Teacher cannot be registered as student')
                 # update student info
-                logger.warning(f'User {user_info} update attempt')
+                custom_logger.warning(f'User {user_info} update attempt')
                 student.username = user_info.username
                 student.name = user_info.full_name
 

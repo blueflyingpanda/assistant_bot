@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, CallbackContext
 from data import DataStorage, UserInfo, PARTICIPATION_TYPES
 from decorators import teacher_only
 from exceptions import LogicError, NotFoundError
-from log import logger
+from logs import custom_logger
 from bot import Bot
 
 
@@ -98,7 +98,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg := update.effective_message.text:
-        logger.warning(msg)
+        custom_logger.warning(msg)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I didn't understand that command")
 
 
@@ -127,14 +127,14 @@ async def ignore(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(
             chat_id=chat_id, text=f'{e.__doc__}'
         )
 
     except LogicError as e:
         msg = f'{chat_id}: {e.args[0]}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(chat_id=chat_id, text=e.args[0])
 
     await context.bot.send_message(chat_id=chat_id,
@@ -159,7 +159,7 @@ async def present(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(
             chat_id=chat_id, text='Lesson should be started before checking attendance. Press /lesson'
         )
@@ -194,7 +194,7 @@ async def grade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         skipped = await ds.grade_students(candidates, mark)
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(
             chat_id=chat_id, text='Lesson should be started before grading students. Press /lesson'
         )
@@ -220,11 +220,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ds.add_student(user_info)
     except LogicError as e:
         msg = f'{chat_id}: {e.args[0]}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(chat_id=chat_id, text=e.args[0])
     except NotFoundError as e:
         msg = f'{chat_id}: {e.__doc__}'
-        logger.warning(msg)
+        custom_logger.warning(msg)
         return await context.bot.send_message(chat_id=chat_id, text='Teacher should start the bot first')
 
     await context.bot.send_message(

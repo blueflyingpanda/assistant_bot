@@ -1,4 +1,4 @@
 python-telegram-bot[all]
 sqlalchemy
 asyncpg
-pytest
+python-json-logger

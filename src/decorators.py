@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 
 from data import DataStorage
 from exceptions import NotFoundError
-from log import logger
+from logs import custom_logger
 
 
 def teacher_only(func):
@@ -18,7 +18,7 @@ def teacher_only(func):
             is_teacher = await ds.check_is_teacher(tg_user_id)
         except NotFoundError as e:
             msg = f'{chat_id}: {e.__doc__}'
-            logger.warning(msg)
+            custom_logger.warning(msg)
             return await context.bot.send_message(chat_id=chat_id, text='Teacher should start the bot first')
 
         if is_teacher:

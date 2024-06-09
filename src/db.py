@@ -6,9 +6,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import mapped_column, Mapped, relationship, DeclarativeBase
 
 from conf import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
-from log import ALCHEMY_ECHO
 
-
+ALCHEMY_ECHO = False
 DESCRIBE = False
 
 
@@ -86,7 +85,8 @@ class Attendance(Base):
 
 
 async_engine = create_async_engine(
-    f'postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}', echo=ALCHEMY_ECHO
+    f'postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}',
+    pool_pre_ping=True, echo=ALCHEMY_ECHO
 )
 ASession = async_sessionmaker(
     bind=async_engine,
