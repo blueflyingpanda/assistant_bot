@@ -1,7 +1,7 @@
 from datetime import date
 from functools import partial
 from random import randint
-
+from exceptions import LogicError, NotFoundError
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 
@@ -102,17 +102,62 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="I didn't understand that command")
 
 
+# async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     chat_id = update.effective_chat.id
+#     ds = DataStorage(chat_id)
+
+#     students = await ds.get_presented()
+#     if not students:
+#         await Bot.display_no_students(update, context)
+#     else:
+#         await context.bot.send_message(
+#             chat_id=update.effective_chat.id,
+#             text=f"I've chosen {students[randint(0, len(students) - 1)]}"
+#         )
 async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     ds = DataStorage(chat_id)
 
-    students = await ds.get_presented()
-    if not students:
-        await Bot.display_no_students(update, context)
-    else:
+    try:
+        all_presented = await ds.get_presented()
+        
+        if not all_presented:
+            await Bot.display_no_students(update, context)
+            return
+            
+        performance_grades = await ds.get_performance(fetch_grades=True)
+        performance_participation = await ds.get_performance(fetch_grades=False)
+        
+        graded_students = set()
+        for username, grades in performance_grades.items():
+            if grades and grades[-1] is not None:  
+                graded_students.add(username)
+                
+        for username, participations in performance_participation.items():
+            if participations and participations[-1] is not None:  
+                graded_students.add(username)
+        
+        eligible_students = [student for student in all_presented if student not in graded_students]
+        
+        if not eligible_students:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="All present students already have grades for this lesson."
+            )
+        else:
+            from random import randint
+            chosen_student = eligible_students[randint(0, len(eligible_students) - 1)]
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"I've chosen {chosen_student}"
+            )
+            
+    except NotFoundError as e:
+        msg = f'{chat_id}: {e.__doc__}'
+        custom_logger.warning(msg)
         await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"I've chosen {students[randint(0, len(students) - 1)]}"
+            chat_id=chat_id, 
+            text='Lesson should be started before choosing random students. Press /lesson'
         )
 
 
