@@ -21,7 +21,8 @@ HANDLERS = (
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Log the error and send a message to the user."""
-    custom_logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    custom_logger.error(msg='Exception while handling an update:', exc_info=context.error)
 
     if isinstance(update, Update):
         await update.message.reply_text("An error occurred, please try again later.")
+
