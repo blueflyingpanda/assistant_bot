@@ -166,7 +166,7 @@ class DataStorage:
                 if student.tg_id in teachers_tg_ids:
                     raise LogicError('Teacher cannot be registered as student')
                 # update student info
-                custom_logger.warning(f'User {user_info} update attempt')
+                custom_logger.warning('User %s update attempt', user_info)
                 student.username = user_info.username
                 student.name = user_info.full_name
 

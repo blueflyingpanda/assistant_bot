@@ -39,5 +39,5 @@ class TgUpdater:
             return 'Success'
 
         except Exception as exc:
-            custom_logger.info(f"Failed to process update with {exc}")
+            custom_logger.error('Failed to process update with %s', exc)
         return 'Failure'
