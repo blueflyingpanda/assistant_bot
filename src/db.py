@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import mapped_column, Mapped, relationship, DeclarativeBase
 
-from assistant_bot.src.conf import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
+from conf import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
 ALCHEMY_ECHO = False
 DESCRIBE = False
