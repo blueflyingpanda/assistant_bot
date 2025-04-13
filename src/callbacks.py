@@ -106,21 +106,13 @@ async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     ds = DataStorage(chat_id)
 
-    try:
-        all_presented = await ds.get_presented()
-    except NotFoundError as e:
-        msg = f'{chat_id}: {e.__doc__}'
-        custom_logger.warning(msg)
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text='Lesson should be started before choosing random students. Press /lesson'
-        )
-        return
-
+    # These lines don't raise NotFoundError, so they shouldn't be in try block
+    all_presented = await ds.get_presented()
     if not all_presented:
         await Bot.display_no_students(update, context)
         return
         
+    # These also don't raise NotFoundError
     performance_grades = await ds.get_performance(fetch_grades=True)
     performance_participation = await ds.get_performance(fetch_grades=False)
     
