@@ -1,17 +1,23 @@
 import json
+
 from telegram import Update, Bot
 from telegram.ext import ApplicationBuilder
+
 from handlers import HANDLERS, error_handler
 from logs import custom_logger
 
 
 class TgUpdater:
+
     def __init__(self, token: str):
         if not token:
             raise Exception('Missing bot token!')
+        
         application = ApplicationBuilder().token(token).build()
+
         application.add_handlers(HANDLERS)
         application.add_error_handler(error_handler)
+        
         self.application = application
         self.bot = Bot(token=token)
 
