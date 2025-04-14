@@ -25,3 +25,4 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
     if isinstance(update, Update):
         await update.message.reply_text('An error occurred, please try again later.')
+

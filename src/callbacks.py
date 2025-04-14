@@ -5,11 +5,11 @@ from random import randint
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 
+from bot import Bot
 from data import DataStorage, UserInfo, PARTICIPATION_TYPES
 from decorators import teacher_only
-from exceptions import LogicError, NotFoundError
+from exceptions import NotFoundError,LogicError
 from logs import custom_logger
-from bot import Bot
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -106,13 +106,35 @@ async def randomize(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     ds = DataStorage(chat_id)
 
-    students = await ds.get_presented()
-    if not students:
+    all_presented = await ds.get_presented()
+    if not all_presented:
         await Bot.display_no_students(update, context)
-    else:
+        return
+        
+    performance_grades = await ds.get_performance(fetch_grades=True)
+    performance_participation = await ds.get_performance(fetch_grades=False)
+    
+    graded_students = set()
+    for username, grades in performance_grades.items():
+        if grades and grades[-1] is not None:  
+            graded_students.add(username)
+            
+    for username, participations in performance_participation.items():
+        if participations and participations[-1] is not None:  
+            graded_students.add(username)
+    
+    eligible_students = [student for student in all_presented if student not in graded_students]
+    
+    if not eligible_students:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=f"I've chosen {students[randint(0, len(students) - 1)]}"
+            text="All present students already have grades for this lesson."
+        )
+    else:
+        chosen_student = eligible_students[randint(0, len(eligible_students) - 1)]
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"I've chosen {chosen_student}"
         )
 
 
