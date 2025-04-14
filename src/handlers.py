@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
-from assistant_bot.src.callbacks import help, start, stop, unknown, randomize, ignore, grade, register, present, timer, lesson
+from callbacks import help, start, stop, unknown, randomize, ignore, grade, register, present, timer, lesson
 from logs import custom_logger
 
 HANDLERS = (
