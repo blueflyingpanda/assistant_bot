@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, CallbackContext
 from bot import Bot
 from data import DataStorage, UserInfo, PARTICIPATION_TYPES
 from decorators import teacher_only
-from exceptions import NotFoundError, LogicError
+from exceptions import NotFoundError
 from logs import custom_logger
 
 
