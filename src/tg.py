@@ -12,12 +12,10 @@ class TgUpdater:
     def __init__(self, token: str):
         if not token:
             raise Exception('Missing bot token!')
-        
         application = ApplicationBuilder().token(token).build()
 
         application.add_handlers(HANDLERS)
         application.add_error_handler(error_handler)
-        
         self.application = application
         self.bot = Bot(token=token)
 
@@ -37,7 +35,6 @@ class TgUpdater:
                 await self.application.stop()
 
             return 'Success'
-        
         except Exception as exc:
             custom_logger.error('Failed to process update with %s', exc)
         return 'Failure'
